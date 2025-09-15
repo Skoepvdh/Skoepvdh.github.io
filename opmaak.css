@@ -48,3 +48,6 @@ ul li {
 ul li:last-child {
   border-right: none;
 }
+table, th, td {
+  border: 1px solid green;
+}
