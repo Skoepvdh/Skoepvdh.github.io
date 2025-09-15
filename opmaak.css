@@ -39,3 +39,12 @@ ul li a:hover {
 ul li a.active {
   background-color: #04AA6D;
 }
+/* Add a lightgray right border to all list items, except the last */
+ul li {
+  float: left;
+  border-right: 1px solid #bbbbbb;
+}
+
+ul li:last-child {
+  border-right: none;
+}
