@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Bomb Throwing Simulation (safe, visual only)</title>
+<style>
+  :root{
+    --bg:#0b1220;
+    --panel:#0e1624cc;
+    --accent:#ffb86b;
+    --muted:#9aa4b2;
+  }
+  html,body{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue";background:linear-gradient(180deg,#071022,#0b1220);color:#e6eef6}
+  #ui {
+    position: absolute; left: 12px; top: 12px; z-index: 20;
+    background: var(--panel); padding:10px; border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,0.5);
+    width:320px; color:var(--muted);
+  }
+  #ui h1{margin:0 0 8px 0; font-size:16px; color:var(--accent)}
+  label{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin:6px 0;color:#dbe8ff}
+  input[type=range]{width:160px;margin-left:8px}
+  button{background:transparent;border:1px solid rgba(255,255,255,0.08);padding:6px 8px;border-radius:6px;color:var(--muted);cursor:pointer}
+  button:hover{border-color:rgba(255,255,255,0.14)}
+  canvas{display:block;width:100vw;height:100vh}
+  #legend{font-size:12px;color:#9db3d1;margin-top:8px}
+  small.note{color:#8ea0b8;display:block;margin-top:6px;font-size:12px}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>Bom-simulatie (visueel)</h1>
+  <div>
+    <label>Gravity <span id="gravVal">0.6</span>
+      <input id="gravity" type="range" min="0" max="2" step="0.05" value="0.6">
+    </label>
+    <label>Bomb mass <span id="massVal">1.0</span>
+      <input id="mass" type="range" min="0.2" max="5" step="0.1" value="1">
+    </label>
+    <label>Explosion radius <span id="radiusVal">100</span>
+      <input id="radius" type="range" min="30" max="250" step="5" value="100">
+    </label>
+    <label>Explosion strength <span id="forceVal">6</span>
+      <input id="force" type="range" min="1" max="20" step="0.5" value="6">
+    </label>
+    <label>Fuse (s) <span id="fuseVal">1.4</span>
+      <input id="fuse" type="range" min="0.0" max="5" step="0.1" value="1.4">
+    </label>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button id="spawn">Maak bom</button>
+      <button id="spawnTarget">Maak target</button>
+      <button id="reset">Reset</button>
+    </div>
+    <small class="note">Klik en sleep op een bom om richting/sterkte te zetten; laat los om te gooien. Botsing of fuse → explosie.</small>
+  </div>
+  <div id="legend"><strong>Controls</strong>: spawn bom / spawn target (blokken) / sliders om fysica te tunen.</div>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+(() => {
+  // Canvas setup
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  let DPR = Math.max(1, window.devicePixelRatio || 1);
+  function resize() {
+    DPR = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.floor(window.innerWidth * DPR);
+    canvas.height = Math.floor(window.innerHeight * DPR);
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Simulation state
+  const objects = []; // movable boxes/targets
+  const bombs = [];
+  const particles = [];
+  const floorY = () => canvas.height / DPR - 20;
+  let gravity = 0.6;
+  let lastTime = 0;
+
+  // UI bindings
+  const $ = (id)=>document.getElementById(id);
+  $('gravity').addEventListener('input', (e)=>{gravity = parseFloat(e.target.value); $('gravVal').textContent = gravity});
+  $('mass').addEventListener('input', (e)=>{$('massVal').textContent = parseFloat(e.target.value)});
+  $('radius').addEventListener('input', (e)=>{$('radiusVal').textContent = parseFloat(e.target.value)});
+  $('force').addEventListener('input', (e)=>{$('forceVal').textContent = parseFloat(e.target.value)});
+  $('fuse').addEventListener('input', (e)=>{$('fuseVal').textContent = parseFloat(e.target.value)});
+
+  // Basic objects: box targets
+  function createTarget(x,y,w=60,h=40, color='#5ad') {
+    objects.push({
+      x, y, w, h,
+      vx: 0, vy: 0, mass: 2, angle: 0, color
+    });
+  }
+  // initial targets
+  for(let i=0;i<4;i++){
+    createTarget(520 + i*80, floorY() - 40, 60, 40, '#67c');
+  }
+
+  // Bomb class
+  function spawnBomb(x,y){
+    const mass = parseFloat($('mass').value);
+    bombs.push({
+      x, y, r: 12,
+      vx: 0, vy: 0,
+      thrown: false, // until released from drag
+      fuse: parseFloat($('fuse').value),
+      born: performance.now(),
+      mass
+    });
+    return bombs[bombs.length-1];
+  }
+
+  // spawn UI
+  $('spawn').addEventListener('click', ()=> spawnBomb(150,100));
+  $('spawnTarget').addEventListener('click', ()=> createTarget(300 + Math.random()*600, floorY()-40, 50+Math.random()*30, 30+Math.random()*30, '#6fb'));
+  $('reset').addEventListener('click', ()=>{ bombs.length=0; objects.length=0; particles.length=0; for(let i=0;i<4;i++)createTarget(520 + i*80, floorY() - 40, 60, 40, '#67c'); });
+
+  // Mouse interactions for dragging/throwing bombs
+  let dragging = null;
+  let dragOffset = {x:0,y:0};
+  canvas.addEventListener('pointerdown', (e) => {
+    const p = getMousePos(e);
+    // find topmost bomb near pointer (within r+6)
+    for(let i=bombs.length-1;i>=0;i--){
+      const b = bombs[i];
+      if(dist(p,b) < b.r + 8){
+        dragging = b;
+        dragOffset.x = p.x - b.x;
+        dragOffset.y = p.y - b.y;
+        b.thrown = false;
+        b.vx = 0; b.vy = 0;
+        break;
+      }
+    }
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if(!dragging) return;
+    const p = getMousePos(e);
+    dragging.x = p.x - dragOffset.x;
+    dragging.y = p.y - dragOffset.y;
+  });
+  canvas.addEventListener('pointerup', (e) => {
+    if(!dragging) return;
+    const p = getMousePos(e);
+    // determine throw velocity from pointer movement direction
+    // simple: velocity proportional to distance from origin of drag start
+    // use pointer's velocity if available
+    const rect = canvas.getBoundingClientRect();
+    const vx = (p.x - dragging.x) * 0.25;
+    const vy = (p.y - dragging.y) * 0.25;
+    dragging.vx = vx;
+    dragging.vy = vy;
+    dragging.thrown = true;
+    dragging.born = performance.now(); // fuse restarts on throw
+    dragging = null;
+  });
+
+  // helpers
+  function getMousePos(e){
+    const rect = canvas.getBoundingClientRect();
+    return { x: (e.clientX - rect.left), y: (e.clientY - rect.top) };
+  }
+  function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy) }
+
+  // Explosion
+  function explode(bomb){
+    // create particles
+    const radius = parseFloat($('radius').value);
+    const strength = parseFloat($('force').value);
+    const count = Math.min(160, Math.floor(20 + radius/2));
+    for(let i=0;i<count;i++){
+      const angle = Math.random()*Math.PI*2;
+      const speed = (0.5 + Math.random()*1.2) * (strength + Math.random()*2) * (radius/120);
+      particles.push({
+        x: bomb.x, y: bomb.y,
+        vx: Math.cos(angle)*speed + bomb.vx*0.2,
+        vy: Math.sin(angle)*speed + bomb.vy*0.2,
+        life: 700 + Math.random()*400,
+        born: performance.now(),
+        size: 2 + Math.random()*4,
+        hue: 30 + Math.random()*40
+      });
+    }
+    // apply impulse to nearby objects
+    objects.forEach(obj=>{
+      // use center of object
+      const cx = obj.x + obj.w/2, cy = obj.y + obj.h/2;
+      const dx = cx - bomb.x, dy = cy - bomb.y;
+      const d = Math.sqrt(dx*dx + dy*dy);
+      if(d < radius + Math.max(obj.w,obj.h)){
+        const force = (1 - (d / radius)) * strength * 60; // tuning factor
+        const nx = (d === 0) ? (Math.random()-0.5) : dx/d;
+        const ny = (d === 0) ? (Math.random()-0.5) : dy/d;
+        // apply to velocity inversely by mass
+        const invMass = 1 / (obj.mass || 1.0);
+        obj.vx += nx * force * invMass;
+        obj.vy += ny * force * invMass - 4; // lift
+      }
+    });
+    // shockwave visual (big particle)
+    particles.push({
+      x: bomb.x, y: bomb.y, vx:0, vy:0, life: 350, born: performance.now(), size: radius*0.6, shock:true
+    });
+    // screen shake
+    shake(8 * Math.min(1, radius/180), 400);
+  }
+
+  // screen shake
+  let shakeAmount = 0, shakeUntil = 0;
+  function shake(amount, duration){ shakeAmount = Math.max(shakeAmount, amount); shakeUntil = performance.now() + duration; }
+
+  // physics step
+  function step(dt){
+    // bombs
+    for(let i=bombs.length-1;i>=0;i--){
+      const b = bombs[i];
+      // fuse timer (if thrown or just placed) - explode when fuse passes or when heavy collision
+      if(performance.now() - b.born > b.fuse * 1000 && b.thrown){
+        explode(b);
+        bombs.splice(i,1);
+        continue;
+      }
+      // integrate (if not being dragged)
+      if(!dragging || dragging !== b){
+        b.vy += gravity * dt * 0.06 * (b.mass || 1);
+        b.x += b.vx * dt * 0.06;
+        b.y += b.vy * dt * 0.06;
+      }
+      // ground collision
+      const gY = floorY();
+      if(b.y + b.r > gY){
+        b.y = gY - b.r;
+        // bounce with damping
+        b.vy *= -0.35;
+        b.vx *= 0.85;
+        // if small bounce and already thrown, explode
+        if(Math.abs(b.vy) < 1.2 && b.thrown && (performance.now() - b.born) > 120){
+          explode(b);
+          bombs.splice(i,1);
+          continue;
+        }
+      }
+      // collision with objects (simple AABB vs circle)
+      for(const obj of objects){
+        if(circleRectCollision(b, obj)){
+          // explode on strong collision or always on contact if thrown
+          if(b.thrown){
+            explode(b);
+            bombs.splice(i,1);
+            break;
+          } else {
+            // minor bounce
+            b.vx *= -0.3; b.vy *= -0.3;
+          }
+        }
+      }
+    }
+
+    // objects integration
+    objects.forEach(obj=>{
+      obj.vy += gravity * dt * 0.06;
+      obj.x += obj.vx * dt * 0.06;
+      obj.y += obj.vy * dt * 0.06;
+      // floor
+      const g = floorY();
+      if(obj.y + obj.h > g){
+        obj.y = g - obj.h;
+        obj.vy *= -0.2;
+        obj.vx *= 0.85;
+        // tiny settle
+        if(Math.abs(obj.vx) < 0.02) obj.vx = 0;
+        if(Math.abs(obj.vy) < 0.02) obj.vy = 0;
+      }
+      // slight rotation based on vx
+      obj.angle = Math.atan2(obj.vy, obj.vx) * 0.07;
+    });
+
+    // particles
+    for(let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      const age = performance.now() - p.born;
+      if(age > p.life){ particles.splice(i,1); continue; }
+      // integrate
+      p.vy += gravity * dt * 0.02;
+      p.x += p.vx * dt * 0.06;
+      p.y += p.vy * dt * 0.06;
+      // ground fade
+      const g = floorY();
+      if(p.y > g) p.y = g;
+    }
+  }
+
+  // collision helper
+  function circleRectCollision(c, r){
+    // find closest point
+    const closestX = clamp(c.x, r.x, r.x + r.w);
+    const closestY = clamp(c.y, r.y, r.y + r.h);
+    const dx = c.x - closestX;
+    const dy = c.y - closestY;
+    return (dx*dx + dy*dy) < (c.r * c.r);
+  }
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+  // render
+  function render(now){
+    const dt = Math.min(30, now - lastTime || 16);
+    lastTime = now;
+    step(dt);
+
+    // clear
+    ctx.fillStyle = '#061024';
+    ctx.fillRect(0,0,canvas.width/DPR,canvas.height/DPR);
+
+    // apply shake
+    let ox = 0, oy = 0;
+    if(performance.now() < shakeUntil){
+      ox = (Math.random()*2-1) * shakeAmount * 10;
+      oy = (Math.random()*2-1) * shakeAmount * 6;
+    } else {
+      shakeAmount = 0;
+    }
+    ctx.save();
+    ctx.translate(ox, oy);
+
+    // background grid subtle
+    drawGrid();
+
+    // draw ground
+    ctx.fillStyle = '#0b2036';
+    ctx.fillRect(0, floorY(), canvas.width/DPR, canvas.height/DPR - floorY());
+
+    // draw objects (targets)
+    objects.forEach(o=>{
+      ctx.save();
+      ctx.translate(o.x + o.w/2, o.y + o.h/2);
+      ctx.rotate(o.angle);
+      ctx.fillStyle = o.color || '#6cf';
+      roundRect(ctx, -o.w/2, -o.h/2, o.w, o.h, 6);
+      ctx.fill();
+      ctx.restore();
+
+      // outline/shadow
+      ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(o.x, o.y, o.w, o.h);
+    });
+
+    // bombs
+    bombs.forEach(b=>{
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      // body
+      const fuseAge = (performance.now() - b.born) / 1000;
+      const fuse = b.fuse;
+      const t = clamp(1 - (fuseAge / Math.max(0.001,fuse)), 0, 1);
+      // glow when close to explode
+      const glow = Math.pow(1 - t, 3);
+      ctx.beginPath();
+      const grd = ctx.createRadialGradient(0,0,b.r*0.2, 0,0,b.r*3);
+      grd.addColorStop(0, `rgba(255,150,30,${0.45 + glow*0.35})`);
+      grd.addColorStop(1, `rgba(0,0,0,0)`);
+      ctx.fillStyle = grd;
+      ctx.arc(0,0,b.r*3,0,Math.PI*2);
+      ctx.fill();
+
+      // ball
+      ctx.beginPath();
+      ctx.fillStyle = '#2b2f3a';
+      ctx.arc(0,0,b.r,0,Math.PI*2);
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#11151b';
+      ctx.stroke();
+
+      // fuse spark
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(255, ${160 + Math.floor(glow*80)}, 50, ${0.9})`;
+      ctx.arc(-b.r + 4, -b.r - 4, 4 + glow*3, 0, Math.PI*2);
+      ctx.fill();
+
+      ctx.restore();
+    });
+
+    // particles
+    particles.forEach(p=>{
+      const age = performance.now() - p.born;
+      const lifeRatio = clamp(1 - age / p.life, 0, 1);
+      if(p.shock){
+        // shock circle
+        ctx.beginPath();
+        ctx.globalAlpha = 0.22 * lifeRatio;
+        ctx.fillStyle = '#ffd9b3';
+        ctx.arc(p.x, p.y, p.size * (1.2 + (1-lifeRatio)*0.6), 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.beginPath();
+        ctx.globalAlpha = 0.9 * lifeRatio;
+        ctx.fillStyle = `hsl(${p.hue} ${60 + Math.round(Math.random()*30)}% ${45}%)`;
+        ctx.arc(p.x, p.y, p.size * (0.7 + (1-lifeRatio)), 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    });
+
+    // HUD hints
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    ctx.fillRect(10,10,200,48);
+    ctx.fillStyle = '#dbe8ff';
+    ctx.font = '12px Inter, system-ui, sans-serif';
+    ctx.fillText('Klik & sleep bom → laat los om te gooien', 18, 30);
+    ctx.fillText('Of klik "Maak bom" en sleep hem', 18, 46);
+
+    ctx.restore();
+    requestAnimationFrame(render);
+  }
+
+  // small helpers for drawing
+  function roundRect(ctx,x,y,w,h,r){ ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); }
+
+  function drawGrid(){
+    const w = canvas.width/DPR, h = canvas.height/DPR;
+    ctx.save();
+    ctx.globalAlpha = 0.06;
+    ctx.strokeStyle = '#55a0ff';
+    ctx.lineWidth = 1;
+    const spacing = 40;
+    for(let x=0;x<w;x+=spacing){
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke();
+    }
+    for(let y=0;y<h;y+=spacing){
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // main loop
+  requestAnimationFrame(render);
+
+  // utility clamp
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+  // keyboard shortcuts
+  window.addEventListener('keydown', (e) => {
+    if(e.key === ' '){ // space spawn bomb at center
+      spawnBomb(canvas.width/DPR/2 - 100 + Math.random()*200, 120);
+    } else if(e.key === 'r' || e.key === 'R'){
+      $('reset').click();
+    }
+  });
+
+  // initial example bomb
+  spawnBomb(160,120);
+
+})();
+</script>
+</body>
+</html>
