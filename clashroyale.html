@@ -3,52 +3,58 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Clash-ish Arena — speelbare demo</title>
+  <title>Arena — originele tower-push demo</title>
   <style>
-    :root{
-      --bg:#0b1220;
-      --card:#223344;
-      --panel:#0f1720;
-      --friendly:#7fe0a9;
-      --enemy:#ff8a8a;
-      --text:#e6eef8;
-    }
-    html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Arial;background:linear-gradient(180deg,#07111a, #0b1730);color:var(--text)}
+    :root{--bg1:#081426;--bg2:#0b2240;--panel:rgba(255,255,255,0.03);--friendly:#7fe0a9;--enemy:#ff8a8a;--text:#e6eef8}
+    html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Arial;background:linear-gradient(180deg,var(--bg1),var(--bg2));color:var(--text)}
     #game-wrap{display:flex;flex-direction:column;height:100vh;padding:12px;box-sizing:border-box}
-    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
     header h1{font-size:18px;margin:0}
+
     #arena{flex:1;display:flex;gap:12px}
-    #board{flex:1;background:linear-gradient(180deg,#0f1a2a 0%, #071025 100%);border-radius:12px;position:relative;overflow:hidden;box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+    #board{flex:1;border-radius:14px;position:relative;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,0.6)}
+    #bg-layer{position:absolute;inset:0;pointer-events:none}
     canvas{width:100%;height:100%;display:block}
-    #ui{width:380px;max-width:40%;display:flex;flex-direction:column}
-    .panel{background:rgba(255,255,255,0.03);border-radius:10px;padding:12px;margin-bottom:12px;backdrop-filter:blur(6px)}
-    #cards{display:flex;gap:8px}
-    .card{flex:1;padding:10px;background:var(--card);border-radius:8px;text-align:center;cursor:pointer;user-select:none}
+
+    #ui{width:420px;max-width:45%;display:flex;flex-direction:column}
+    .panel{background:var(--panel);border-radius:10px;padding:12px;margin-bottom:12px;backdrop-filter:blur(6px)}
+    #cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .card{padding:10px;background:#223344;border-radius:8px;text-align:center;cursor:pointer;user-select:none}
     .card.selected{outline:2px solid #ffde59}
     .card .cost{font-weight:700}
-    #elixir-bar{height:18px;background:#0b1520;border-radius:9px;overflow:hidden;position:relative}
+    #elixir-bar{height:18px;background:#07121b;border-radius:9px;overflow:hidden;position:relative}
     #elixir-fill{height:100%;width:0%;background:linear-gradient(90deg,#7fe0a9,#5bd0cf);transition:width 0.2s}
-    #log{height:100px;overflow:auto;font-size:13px}
+    #log{height:160px;overflow:auto;font-size:13px}
     button{background:#173044;color:var(--text);border:0;padding:8px 12px;border-radius:8px;cursor:pointer}
     footer{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
     small{opacity:0.7}
     .hpbar{height:8px;background:rgba(255,255,255,0.08);border-radius:8px}
-    .hpfill{height:100%;background:linear-gradient(90deg,#66d183,#22b36a)}
-    .tower-label{position:absolute;font-size:12px;padding:6px;border-radius:6px;background:rgba(0,0,0,0.4)}
+
+    /* mooie achtergrond lagen (CSS) */
+    .parallax{position:absolute;inset:0;overflow:hidden}
+    .layer{position:absolute;left:50%;transform:translateX(-50%);opacity:0.9}
+    .cloud{width:140%;height:180px;background:radial-gradient(ellipse at 60% 40%, rgba(255,255,255,0.06), rgba(255,255,255,0.01));top:40px}
+    .hills{width:120%;height:260px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.05));bottom:-40px;border-radius:160px}
+
+    @media (max-width:900px){#ui{display:none}}
   </style>
 </head>
 <body>
   <div id="game-wrap">
     <header>
-      <h1>Clash-ish Arena — speelbare demo</h1>
+      <h1>Arena — originele tower-push demo (inspired)</h1>
       <div>
         <button id="restart">Herstart</button>
-        <small style="margin-left:8px">(klik een kaart → klik op het strijdveld om te deployen)</small>
+        <small style="margin-left:8px">(klik kaart → klik in jouw helft om te deployen)</small>
       </div>
     </header>
 
     <div id="arena">
       <div id="board">
+        <div id="bg-layer" class="parallax">
+          <div class="layer cloud" style="top:20px;transform:translateX(-50%);opacity:0.8"></div>
+          <div class="layer hills" style="bottom:-20px;opacity:0.75"></div>
+        </div>
         <canvas id="c"></canvas>
       </div>
 
@@ -57,11 +63,11 @@
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
             <div>
               <div>Jij</div>
-              <div class="hpbar" style="width:160px;margin-top:6px"><div id="playerHP" class="hpfill" style="width:100%"></div></div>
+              <div class="hpbar" style="width:160px;margin-top:6px"><div id="playerHP" class="hpfill" style="width:100%;height:100%;background:linear-gradient(90deg,#66d183,#22b36a)"></div></div>
             </div>
             <div style="text-align:right">
               <div>Vijand</div>
-              <div class="hpbar" style="width:160px;margin-top:6px"><div id="enemyHP" class="hpfill" style="width:100%"></div></div>
+              <div class="hpbar" style="width:160px;margin-top:6px"><div id="enemyHP" class="hpfill" style="width:100%;height:100%;background:linear-gradient(90deg,#ff9a9a,#ff5e5e)"></div></div>
             </div>
           </div>
           <div id="elixir-bar" style="margin-bottom:8px"><div id="elixir-fill"></div></div>
@@ -77,20 +83,19 @@
         </div>
 
         <div class="panel" style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center">
-          <div style="text-align:center;opacity:0.9">Dit is een eenvoudige, originele demo geïnspireerd door tower-push games.
-          Geen assets of code van het origineel worden gebruikt — volledig nieuw ontwerp.</div>
+          <div style="text-align:center;opacity:0.95">Veel poppetjes, verschillende rollen (tank, support, ranged, splash) en een sfeervolle achtergrond — alles origineel ontworpen.</div>
         </div>
       </div>
     </div>
 
     <footer>
-      <small>Ontworpen door AI — demo. Vraag om extra features: matchmaking, kaarten, balans, of netwerk multiplayer.</small>
+      <small>Originele demo — geen gebruik van officiële assets.</small>
       <div></div>
     </footer>
   </div>
 
 <script>
-// ---- Setup canvas ----
+// --- Canvas setup ---
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 function resize(){
@@ -100,32 +105,28 @@ function resize(){
 window.addEventListener('resize', resize);
 resize();
 
-// ---- Game constants ----
+// --- Game constants ---
 const GAME_WIDTH = 900;
 const GAME_HEIGHT = 600;
 const SCALE_X = () => canvas.width / GAME_WIDTH;
 const SCALE_Y = () => canvas.height / GAME_HEIGHT;
 
-// ---- Utility ----
+// --- Utils ---
 const rand = (a,b)=> a + Math.random()*(b-a);
 const clamp = (v,a,b)=> Math.max(a,Math.min(b,v));
-const dist = (a,b)=> Math.hypot(a.x-b.x,a.y-b.y);
 
-// ---- Game state ----
+// --- State ---
 let lastTime = performance.now();
 let entities = [];
-let projectiles = [];
 let particles = [];
 let gameOver = false;
-let timerSeconds = 180; // 3 min
+let timerSeconds = 180;
 let elixir = 5;
 const ELIXIR_MAX = 10;
 let selectedCard = null;
 let logEl = document.getElementById('log');
-let playerHP = 100;
-let enemyHP = 100;
+let playerHP = 100; let enemyHP = 100;
 
-// Towers positions (friendly bottom, enemy top)
 const towers = {
   friendlyLeft:{x:200,y:520,hp:60,isEnemy:false},
   friendlyRight:{x:700,y:520,hp:60,isEnemy:false},
@@ -135,321 +136,201 @@ const towers = {
   kingEnemy:{x:450,y:40,hp:120,isEnemy:true}
 };
 
-function log(s){
-  const el = document.createElement('div');
-  el.textContent = s;
-  logEl.prepend(el);
-  while(logEl.children.length>40) logEl.removeChild(logEl.lastChild);
-}
+function log(s){const el=document.createElement('div');el.textContent=s;logEl.prepend(el);while(logEl.children.length>60) logEl.removeChild(logEl.lastChild)}
 
-// ---- Cards ----
+// --- Troepen definities (veel poppetjes) ---
 const cardDefs = [
-  {id:'knight',name:'Knight',cost:3,hp:20,dmg:8,speed:30,size:18,color:'#c9b28f',range:14},
-  {id:'archer',name:'Archer',cost:2,hp:12,dmg:4,speed:60,size:12,color:'#7fb3ff',range:120},
-  {id:'giant',name:'Giant',cost:5,hp:40,dmg:14,speed:20,size:26,color:'#f6a36b',range:16}
+  {id:'knight',name:'Knight',cost:3,hp:40,dmg:7,speed:32,size:18,color:'#c9b28f',type:'melee',range:18},
+  {id:'archer',name:'Archer',cost:2,hp:18,dmg:5,speed:60,size:12,color:'#7fb3ff',type:'ranged',range:140,projSpeed:400},
+  {id:'giant',name:'Giant',cost:5,hp:120,dmg:16,speed:20,size:28,color:'#f6a36b',type:'tank',range:20},
+  {id:'wizard',name:'Wizard',cost:4,hp:30,dmg:18,speed:36,size:14,color:'#bb88ff',type:'splash',range:120,splash:24},
+  {id:'miniPekka',name:'MiniPekka',cost:4,hp:70,dmg:28,speed:34,size:20,color:'#888888',type:'single',range:18},
+  {id:'healer',name:'Healer',cost:3,hp:36,dmg:-10,speed:38,size:14,color:'#fff1a8',type:'support',range:80},
+  {id:'bombero',name:'Bomber',cost:3,hp:24,dmg:36,speed:25,size:16,color:'#e06b6b',type:'splashmelee',range:18,splash:48},
+  {id:'musketeer',name:'Musketeer',cost:4,hp:34,dmg:12,speed:48,size:14,color:'#a8f0ff',type:'ranged',range:220,projSpeed:600},
+  {id:'valkyrie',name:'Valkyrie',cost:4,hp:80,dmg:14,speed:30,size:20,color:'#f4d1a3',type:'spin',range:22,splash:36},
+  {id:'fireball',name:'Fireball',cost:2,hp:1,dmg:50,speed:0,size:12,color:'#ff8a33',type:'spell',range:999}
 ];
 
+// render cards UI
 const cardsContainer = document.getElementById('cards');
 cardDefs.forEach(def=>{
-  const el = document.createElement('div');
-  el.className='card';
+  const el = document.createElement('div'); el.className='card';
   el.innerHTML = `<div style="font-weight:700">${def.name}</div><div class="cost">${def.cost}💧</div>`;
-  el.onclick = ()=>{
-    document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected'));
-    if(selectedCard===def) { selectedCard=null; el.classList.remove('selected'); }
-    else { selectedCard=def; el.classList.add('selected'); }
-  };
+  el.onclick = ()=>{ document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected')); if(selectedCard===def){ selectedCard=null; } else { selectedCard=def; el.classList.add('selected'); }};
   cardsContainer.appendChild(el);
   def._el = el;
 });
 
-// ---- Entities ----
+// --- Entity classes ---
 class Unit{
   constructor(x,y,opts){
-    this.x=x;this.y=y;this.vx=0;this.vy=0;this.hp=opts.hp;this.maxHp=opts.hp;this.dmg=opts.dmg;this.speed=opts.speed;this.size=opts.size;this.color=opts.color;this.isEnemy=!!opts.isEnemy;this.range=opts.range||16;this.target=null;this.id= Math.random().toString(36).slice(2,9);
+    this.x=x;this.y=y;this.vx=0;this.vy=0;this.hp=opts.hp;this.maxHp=opts.hp;this.dmg=opts.dmg;this.speed=opts.speed;this.size=opts.size;this.color=opts.color;this.isEnemy=!!opts.isEnemy;this.type=opts.type;this.range=opts.range||18;this.id=Math.random().toString(36).slice(2,9);this.target=null;this.projSpeed=opts.projSpeed||0;this.splash=opts.splash||0;this.spinTimer=0;this.life=opts.life||999;
   }
   update(dt){
-    // find nearest enemy unit or tower
-    if(!this.target || this.target.hp<=0){
-      // search units
+    if(this.type==='spell'){
+      // spells move upward if enemy spell, downward if friendly
+      if(this.isEnemy) this.y += -80*dt; else this.y += 80*dt;
+      // spells explode on reach (we'll check in global)
+      this.life -= dt; if(this.life<=0) this.hp=0;
+      return;
+    }
+
+    // Healer behaviour
+    if(this.type==='support'){
+      // move forward slowly
+      this.y += this.isEnemy? 10*dt : -10*dt;
+      // heal nearby friendly units
+      for(const u of entities){ if(u!==this && u.isEnemy===this.isEnemy && u.hp<u.maxHp){ const d=Math.hypot(u.x-this.x,u.y-this.y); if(d<this.range){ u.hp = clamp(u.hp - this.dmg*dt,0,u.maxHp); particles.push(new Particle(u.x,u.y,'#fff1a8')); } } }
+      return;
+    }
+
+    // find target (units first, then towers)
+    if(!this.target || (this.target.hp!==undefined && this.target.hp<=0)){
       let best=null;let bestd=1e9;
-      for(const e of entities){
-        if(e===this) continue;
-        if(e.isEnemy===this.isEnemy) continue;
-        const d = Math.hypot(e.x-this.x,e.y-this.y);
-        if(d<bestd){bestd=d;best=e}
-      }
-      // towers
-      for(const key in towers){
-        const t=towers[key];
-        if(t.isEnemy===this.isEnemy) continue;
-        const d = Math.hypot(t.x-this.x,t.y-this.y);
-        if(d<bestd){bestd=d;best=t}
-      }
+      for(const e of entities){ if(e===this) continue; if(e.isEnemy===this.isEnemy) continue; const d=Math.hypot(e.x-this.x,e.y-this.y); if(d<bestd){bestd=d;best=e}};
+      for(const key in towers){ const t=towers[key]; if(t.isEnemy===this.isEnemy) continue; const d=Math.hypot(t.x-this.x,t.y-this.y); if(d<bestd){bestd=d;best=t} }
       this.target = best;
     }
+
     if(this.target){
-      const dx = (this.target.x||this.target.x)-this.x; // target has x
-      const dy = (this.target.y||this.target.y)-this.y;
-      const d = Math.hypot(dx,dy);
-      if(d>this.range){
-        // move toward
-        this.vx = (dx/d)*this.speed;
-        this.vy = (dy/d)*this.speed;
-        this.x += this.vx*dt;
-        this.y += this.vy*dt;
-      } else {
-        // attack
-        this.vx=0;this.vy=0;
-        // simple attack cooldown
-        if(!this._atkTimer) this._atkTimer=0;
-        this._atkTimer -= dt;
-        if(this._atkTimer<=0){
-          this._atkTimer = 0.8; // seconds between hits
-          if(this.target.hp!==undefined){
-            this.target.hp -= this.dmg;
-            particles.push(new Particle(this.target.x,this.target.y, this.isEnemy? 'red':'#7fe0a9'));
-            if(this.target.hp<=0){
-              if(this.target === towers.kingEnemy || this.target === towers.kingFriendly){
-                this.target.hp=0;
-              }
-              // remove target if it was a unit
-              if(this.target.id){
-                const idx = entities.indexOf(this.target);
-                if(idx>=0) entities.splice(idx,1);
-              }
-              this.target = null;
-            }
-          }
+      const dx = this.target.x - this.x; const dy = this.target.y - this.y; const d = Math.hypot(dx,dy);
+      if(this.type==='ranged' || this.type==='musketeer' || this.type==='wizard'){
+        // keep distance
+        if(d>this.range){ // approach
+          this.vx = (dx/d)*this.speed; this.vy=(dy/d)*this.speed; this.x+=this.vx*dt; this.y+=this.vy*dt;
+        } else {
+          // attack from range -> spawn projectile
+          if(!this._atkTimer) this._atkTimer=0; this._atkTimer -= dt; if(this._atkTimer<=0){ this._atkTimer = 0.9; if(this.type==='ranged' || this.type==='musketeer'){ spawnProjectile(this,this.target); } else if(this.type==='wizard'){ // splash projectile
+            spawnProjectile(this,this.target,true);
+          } }
         }
+      } else if(this.type==='spin'){
+        // valkyrie spins and deals splash to all nearby enemies
+        this.vx = (dx/d)*this.speed; this.vy=(dy/d)*this.speed; this.x+=this.vx*dt; this.y+=this.vy*dt;
+        this.spinTimer -= dt; if(this.spinTimer<=0){ this.spinTimer=0.6; // spin every 0.6s
+          for(const e of entities){ if(e.isEnemy===this.isEnemy) continue; const dd=Math.hypot(e.x-this.x,e.y-this.y); if(dd < this.splash){ e.hp -= this.dmg; particles.push(new Particle(e.x,e.y,'#f4d1a3')); } }
+        }
+      } else {
+        // melee approach
+        if(d>this.range){ this.vx=(dx/d)*this.speed; this.vy=(dy/d)*this.speed; this.x+=this.vx*dt; this.y+=this.vy*dt; }
+        else { if(!this._atkTimer) this._atkTimer=0; this._atkTimer -= dt; if(this._atkTimer<=0){ this._atkTimer=0.8; if(this.target.hp!==undefined){ this.target.hp -= this.dmg; particles.push(new Particle(this.target.x,this.target.y, this.isEnemy? 'red':'#7fe0a9')); if(this.target.hp<=0){ if(this.target.id){ const i = entities.indexOf(this.target); if(i>=0) entities.splice(i,1); } this.target=null; } } } }
       }
     }
-    // simple lifespan
-    if(this.hp<=0){
-      const idx = entities.indexOf(this);
-      if(idx>=0) entities.splice(idx,1);
-    }
+
+    if(this.hp<=0){ const i = entities.indexOf(this); if(i>=0) entities.splice(i,1); }
   }
-  draw(ctx,scale){
-    ctx.save();
-    ctx.beginPath();
-    ctx.fillStyle = this.color;
-    ctx.translate(this.x*scale.x, this.y*scale.y);
-    ctx.arc(0,0,this.size*scale.x,0,Math.PI*2);
-    ctx.fill();
-    // hp
-    ctx.fillStyle='rgba(0,0,0,0.5)';
-    ctx.fillRect(-this.size*scale.x, -this.size*scale.x-8, this.size*2*scale.x,4);
-    ctx.fillStyle = 'lime';
-    const w = (this.hp/this.maxHp) * this.size*2*scale.x;
-    ctx.fillRect(-this.size*scale.x, -this.size*scale.x-8, w,4);
-    ctx.restore();
-  }
+  draw(ctx,scale){ ctx.save(); ctx.translate(this.x*scale.x,this.y*scale.y); ctx.beginPath(); ctx.fillStyle=this.color; ctx.arc(0,0,this.size*scale.x,0,Math.PI*2); ctx.fill(); // hp small
+    ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(-this.size*scale.x, -this.size*scale.x-8, this.size*2*scale.x,4); ctx.fillStyle='lime'; const w=(this.hp/this.maxHp)*this.size*2*scale.x; ctx.fillRect(-this.size*scale.x, -this.size*scale.x-8, w,4); ctx.restore(); }
 }
 
-class Particle{
-  constructor(x,y,color){this.x=x;this.y=y;this.color=color;this.life=0.5;this.vx=rand(-40,40);this.vy=rand(-80,-10)}
-  update(dt){this.life-=dt;this.x += this.vx*dt;this.y += this.vy*dt}
-  draw(ctx,scale){if(this.life<=0) return;ctx.save();ctx.globalAlpha = Math.max(0, this.life/0.5);ctx.fillStyle=this.color;ctx.fillRect(this.x*scale.x-2,this.y*scale.y-2,4,4);ctx.restore();}
+class Projectile{
+  constructor(x,y,tx,ty,owner,dmg,speed,isSplash,splashRadius){ this.x=x;this.y=y;this.tx=tx;this.ty=ty;this.owner=owner;this.dmg=dmg;this.speed=speed;this.isSplash=isSplash;this.splashRadius=splashRadius; const dx=tx-x; const dy=ty-y; const d=Math.hypot(dx,dy)||1; this.vx=(dx/d)*speed; this.vy=(dy/d)*speed; this.life=5; }
+  update(dt){ this.x+=this.vx*dt; this.y+=this.vy*dt; this.life-=dt; // collision with units or towers
+    for(const e of entities){ if(e.isEnemy===this.owner.isEnemy) continue; const d=Math.hypot(e.x-this.x,e.y-this.y); if(d < (e.size+6)){ // hit
+        if(this.isSplash){ for(const t of entities){ if(t.isEnemy!==this.owner.isEnemy){ const dd=Math.hypot(t.x-this.x,t.y-this.y); if(dd < this.splashRadius){ t.hp -= this.dmg; particles.push(new Particle(t.x,t.y,'#ffb3a3')); } } } }
+        else { e.hp -= this.dmg; particles.push(new Particle(e.x,e.y,'#ffb3a3')); }
+        this.life = -1; break; } }
+    // towers
+    for(const k in towers){ const tw = towers[k]; if(tw.isEnemy===this.owner.isEnemy) continue; const d2=Math.hypot(tw.x-this.x,tw.y-this.y); if(d2 < 36){ tw.hp -= this.dmg; particles.push(new Particle(tw.x,tw.y,'#ffb3a3')); this.life=-1; break; } }
+  }
+  draw(ctx,scale){ ctx.save(); ctx.beginPath(); ctx.fillStyle='#ffd0b3'; ctx.arc(this.x*scale.x,this.y*scale.y,6*scale.x,0,Math.PI*2); ctx.fill(); ctx.restore(); }
 }
 
-// ---- Deploying ----
+class Particle{ constructor(x,y,color){ this.x=x;this.y=y;this.vx=rand(-40,40);this.vy=rand(-80,-10);this.life=0.5;this.color=color } update(dt){ this.life-=dt; this.x+=this.vx*dt; this.y+=this.vy*dt } draw(ctx,scale){ if(this.life<=0) return; ctx.save(); ctx.globalAlpha = Math.max(0, this.life/0.5); ctx.fillStyle=this.color; ctx.fillRect(this.x*scale.x-2,this.y*scale.y-2,4,4); ctx.restore(); } }
+
+let projectiles = [];
+
+function spawnProjectile(unit,target,isSplash=false){ const tx = target.x; const ty = target.y; const speed = unit.projSpeed||360; const dmg = unit.dmg; const splash = isSplash? unit.splash||30:0; projectiles.push(new Projectile(unit.x,unit.y,tx,ty,unit,dmg,speed,isSplash,splash)); }
+
+function spawnUnit(x,y,opts){ const u = new Unit(x,y,opts); entities.push(u); log((opts.isEnemy? 'Vijand':'Je') + ' deployt ' + opts.name); }
+
+// --- Deploying ---
 canvas.onclick = (e)=>{
   if(gameOver) return;
   if(!selectedCard) return;
-  // get click in game coords
   const rect = canvas.getBoundingClientRect();
   const cx = (e.clientX - rect.left)/rect.width * GAME_WIDTH;
   const cy = (e.clientY - rect.top)/rect.height * GAME_HEIGHT;
-  // only allow deploy on your half (bottom half)
-  if(cy < GAME_HEIGHT/2) { log('Je kunt alleen op jouw helft deployen.'); return; }
+  // if spell, spawn as projectile that explodes on impact
   if(elixir < selectedCard.cost){ log('Niet genoeg elixir'); return; }
+  if(selectedCard.type==='spell'){
+    // allow targeting anywhere
+    elixir -= selectedCard.cost; updateElixirUI();
+    // spawn a short-lived spell entity that explodes on creation
+    const s = new Unit(cx, cy, {hp:1,dmg:selectedCard.dmg,size:12,color:selectedCard.color,isEnemy:false,type:'spell',life:0.01}); entities.push(s);
+    selectedCard._el.classList.remove('selected'); selectedCard=null; return;
+  }
+  // only bottom half
+  if(cy < GAME_HEIGHT/2){ log('Klik op jouw helft om te deployen'); return; }
   elixir -= selectedCard.cost; updateElixirUI();
-  spawnUnit(cx,cy,{...selectedCard, isEnemy:false});
-  selectedCard._el.classList.remove('selected'); selectedCard=null;
+  spawnUnit(cx,cy,{...selectedCard,isEnemy:false}); selectedCard._el.classList.remove('selected'); selectedCard=null;
 }
 
-function spawnUnit(x,y,opts){
-  const u = new Unit(x,y,{hp:opts.hp,dmg:opts.dmg,speed:opts.speed,size:opts.size,color:opts.color,isEnemy:opts.isEnemy,range:opts.range});
-  entities.push(u);
-  log((opts.isEnemy? 'Vijand':'Je') + ' deployt ' + opts.name);
+// --- Enemy AI: sterkere tegenstander ---
+let enemySpawnTimer = 1.1; let enemyBudget = 0;
+function enemyAI(dt){ enemySpawnTimer -= dt; if(enemySpawnTimer<=0){ enemySpawnTimer = rand(0.9,2.2); // more frequent
+    // choose tactics based on current battlefield
+    const friendlyCount = entities.filter(x=>!x.isEnemy).length;
+    const enemyCount = entities.filter(x=>x.isEnemy).length;
+    let def;
+    if(enemyCount < 3) def = cardDefs[Math.floor(rand(2,6))]; // more tanks/support early
+    else if(friendlyCount>5) def = cardDefs[Math.floor(rand(5,9))];
+    else def = cardDefs[Math.floor(rand(0,cardDefs.length))];
+    const x = rand(120,780); const y = rand(60,170);
+    spawnUnit(x,y,{...def,isEnemy:true}); }
 }
 
-// ---- Enemy AI ----
-let enemySpawnTimer = 2.5;
-function enemyAI(dt){
-  enemySpawnTimer -= dt;
-  if(enemySpawnTimer <=0){
-    enemySpawnTimer = rand(1.5,3.5);
-    // pick a card
-    const def = cardDefs[Math.floor(rand(0,cardDefs.length))];
-    // pick spawn position on top half
-    const x = rand(120,780);
-    const y = rand(90,170);
-    spawnUnit(x,y,{...def,isEnemy:true});
-  }
-}
+// --- Game update/draw ---
+function updateElixirUI(){ document.getElementById('elixir-fill').style.width = (elixir/ELIXIR_MAX*100)+'%'; }
+function updateHPUI(){ document.getElementById('playerHP').style.width = clamp(playerHP,0,100) + '%'; document.getElementById('enemyHP').style.width = clamp(enemyHP,0,100) + '%'; }
+function formatTime(s){ const m=Math.floor(s/60); const sec=Math.floor(s%60); return `${m}:${sec.toString().padStart(2,'0')}` }
 
-// ---- Towers / King damage handling ----
-function applyTowerDamage(){
-  // if any tower HP zero, reduce player/enemy HP
-  for(const key in towers){
-    const t = towers[key];
-    if(t.hp<=0 && !t._counted){
-      t._counted = true;
-      if(t.isEnemy){ enemyHP -= (key.includes('king')?40:20); }
-      else { playerHP -= (key.includes('king')?40:20); }
-      updateHPUI();
-      log((t.isEnemy? 'Vijandelijke ':'Jouw ') + key + ' is vernietigd!');
-    }
-  }
-}
+function applyTowerDamage(){ for(const key in towers){ const t = towers[key]; if(t.hp<=0 && !t._counted){ t._counted=true; if(t.isEnemy){ enemyHP -= (key.includes('king')?40:18); } else { playerHP -= (key.includes('king')?40:18); } updateHPUI(); log((t.isEnemy? 'Vijand ':'Jouw ') + key + ' vernietigd'); } } }
 
-function updateHPUI(){
-  document.getElementById('playerHP').style.width = clamp(playerHP,0,100) + '%';
-  document.getElementById('enemyHP').style.width = clamp(enemyHP,0,100) + '%';
-}
-
-// ---- Elixir regen ----
-let elixirTimer = 0;
-function updateElixirUI(){
-  document.getElementById('elixir-fill').style.width = (elixir/ELIXIR_MAX*100)+'%';
-}
-
-// ---- Timer display ----
-function formatTime(s){const m=Math.floor(s/60);const sec=Math.floor(s%60);return `${m}:${sec.toString().padStart(2,'0')}` }
-
-// ---- Main loop ----
-function update(dt){
-  if(gameOver) return;
-  // units update
-  for(const e of [...entities]){
-    e.update(dt);
-  }
-  for(const p of [...particles]){ p.update(dt); if(p.life<=0){ const i=particles.indexOf(p); if(i>=0) particles.splice(i,1);} }
-
-  // enemy AI
+function update(dt){ if(gameOver) return; for(const u of [...entities]) u.update(dt); for(const p of [...projectiles]){ p.update(dt); if(p.life<=0){ const i = projectiles.indexOf(p); if(i>=0) projectiles.splice(i,1); } }
+  for(const pa of [...particles]){ pa.update(dt); if(pa.life<=0){ const i=particles.indexOf(pa); if(i>=0) particles.splice(i,1); } }
   enemyAI(dt);
-
-  // elixir
-  elixirTimer += dt;
-  if(elixirTimer>=1){ elixirTimer=0; elixir = clamp(elixir+1,0,ELIXIR_MAX); updateElixirUI(); }
-
-  // timer
-  timerSeconds -= dt;
-  document.getElementById('timer').textContent = formatTime(timerSeconds);
-
-  // towers weak when many units near
-  for(const key in towers){
-    const t=towers[key];
-    // friendly towers are attacked by enemy units in range
-    for(const u of entities){
-      if((u.isEnemy && t.isEnemy===false) || (!u.isEnemy && t.isEnemy===true)){
-        const d = Math.hypot(u.x-t.x,u.y-t.y);
-        if(d < 40){ t.hp -= u.dmg*dt*0.5; particles.push(new Particle(t.x,t.y,u.isEnemy? 'red':'#7fe0a9')); }
-      }
-    }
-    t.hp = clamp(t.hp,0, (t===towers.kingEnemy||t===towers.kingFriendly)?120:60);
-  }
-
+  // elixir regen
+  if(!window._elixirAcc) window._elixirAcc=0; window._elixirAcc+=dt; if(window._elixirAcc>=1){ window._elixirAcc=0; elixir = clamp(elixir+1,0,ELIXIR_MAX); updateElixirUI(); }
+  // towers take damage from nearby enemies
+  for(const key in towers){ const t = towers[key]; for(const u of entities){ if(u.isEnemy===t.isEnemy) continue; const d=Math.hypot(u.x-t.x,u.y-t.y); if(d < 40) t.hp -= u.dmg*dt*0.6; } t.hp = clamp(t.hp,0,(t===towers.kingEnemy||t===towers.kingFriendly)?120:60); }
   applyTowerDamage();
-
-  if(playerHP<=0 || enemyHP<=0 || timerSeconds<=0){
-    endGame();
+  // check spells (entities with type spell) — explode into splash
+  for(const e of [...entities]){ if(e.type==='spell'){ // apply area dmg
+      for(const t of entities){ if(t.isEnemy===e.isEnemy) continue; const d=Math.hypot(t.x-e.x,t.y-e.y); if(d < 80){ t.hp -= e.dmg; particles.push(new Particle(t.x,t.y,'#ff9a66')); } }
+      // damage towers
+      for(const k in towers){ const tw = towers[k]; if(tw.isEnemy===e.isEnemy) continue; const dd = Math.hypot(tw.x-e.x,tw.y-e.y); if(dd < 80) tw.hp -= e.dmg; }
+      const idx = entities.indexOf(e); if(idx>=0) entities.splice(idx,1); }
   }
-}
 
-function endGame(){
-  gameOver = true;
-  let result = 'Gelijkspel';
-  if(playerHP>enemyHP) result='Je wint!';
-  else if(playerHP<enemyHP) result='Je verliest...';
-  log('--- ' + result + ' ---');
-}
+  // projectiles vs towers handled in projectile.update
+  // end conditions
+  timerSeconds -= dt; document.getElementById('timer').textContent = formatTime(timerSeconds);
+  if(playerHP<=0 || enemyHP<=0 || timerSeconds<=0) endGame(); }
 
-function draw(){
-  const sx = SCALE_X();
-  const sy = SCALE_Y();
-  const scale = {x:sx,y:sy};
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  // background lanes
-  ctx.save();
-  ctx.fillStyle='rgba(255,255,255,0.02)';
-  ctx.fillRect(0, GAME_HEIGHT*0.5*sy - 20*sy, canvas.width, 40*sy);
-  ctx.restore();
-
+function draw(){ const sx = SCALE_X(); const sy = SCALE_Y(); const scale={x:sx,y:sy}; ctx.clearRect(0,0,canvas.width,canvas.height);
+  // draw lanes
+  ctx.save(); ctx.fillStyle='rgba(255,255,255,0.02)'; ctx.fillRect(0, GAME_HEIGHT*0.5*scale.y - 28*scale.y, canvas.width, 56*scale.y); ctx.restore();
   // draw towers
-  for(const key in towers){
-    const t = towers[key];
-    const x = t.x*scale.x; const y = t.y*scale.y;
-    ctx.save();
-    // base
-    ctx.beginPath(); ctx.fillStyle = t.isEnemy? 'rgba(255,100,100,0.9)':'rgba(120,220,150,0.95)';
-    ctx.roundRect(x-34*scale.x,y-28*scale.y,68*scale.x,48*scale.y,6*scale.x); ctx.fill();
-    // hp
-    ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(x-30*scale.x,y-36*scale.y,60*scale.x,6*scale.y);
-    ctx.fillStyle='rgba(255,255,255,0.9)'; const w = (t.hp/((t===towers.kingEnemy||t===towers.kingFriendly)?120:60))*56*scale.x; ctx.fillRect(x-28*scale.x,y-35*scale.y,w,4*scale.y);
-    ctx.restore();
-  }
-
+  for(const key in towers){ const t=towers[key]; const x=t.x*scale.x; const y=t.y*scale.y; ctx.save(); ctx.beginPath(); ctx.fillStyle = t.isEnemy? 'rgba(255,90,90,0.95)':'rgba(120,220,150,0.95)'; ctx.roundRect(x-36*scale.x,y-32*scale.y,72*scale.x,52*scale.y,8*scale.x); ctx.fill(); ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(x-30*scale.x,y-40*scale.y,60*scale.x,6*scale.y); ctx.fillStyle='white'; const w=(t.hp/((t===towers.kingEnemy||t===towers.kingFriendly)?120:60))*56*scale.x; ctx.fillRect(x-28*scale.x,y-38*scale.y,w,4*scale.y); ctx.restore(); }
   // draw entities
-  for(const e of entities){ e.draw(ctx,scale); }
-  for(const p of particles){ p.draw(ctx,scale); }
-
-  // HUD help: selected card icon
-  if(selectedCard){
-    ctx.save();
-    ctx.globalAlpha=0.9; ctx.fillStyle='rgba(255,255,255,0.04)'; ctx.fillRect(0,0,canvas.width,60*scale.y);
-    ctx.fillStyle='white'; ctx.font = `${14*scale.x}px Arial`; ctx.fillText('Geselecteerd: '+selectedCard.name, 12*scale.x, 18*scale.y);
-    ctx.restore();
-  }
-
-  // game over text
-  if(gameOver){
-    ctx.save(); ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    ctx.fillStyle='white'; ctx.font = `${44*scale.x}px Arial`;
-    ctx.textAlign='center'; ctx.fillText('Einde', canvas.width/2, canvas.height/2);
-    ctx.restore();
-  }
+  for(const e of entities) e.draw(ctx,scale);
+  for(const p of projectiles) p.draw(ctx,scale);
+  for(const pa of particles) pa.draw(ctx,scale);
+  // selected card hint
+  if(selectedCard){ ctx.save(); ctx.globalAlpha=0.9; ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.fillRect(8*scale.x,8*scale.y,220*scale.x,40*scale.y); ctx.fillStyle='white'; ctx.font=`${14*scale.x}px Arial`; ctx.fillText('Geselecteerd: '+selectedCard.name, 18*scale.x, 32*scale.y); ctx.restore(); }
+  if(gameOver){ ctx.save(); ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.fillStyle='white'; ctx.font=`${42*scale.x}px Arial`; ctx.textAlign='center'; ctx.fillText('Einde', canvas.width/2, canvas.height/2); ctx.restore(); }
 }
+CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) { if (w < 2 * r) r = w / 2; if (h < 2 * r) r = h / 2; this.beginPath(); this.moveTo(x + r, y); this.arcTo(x + w, y, x + w, y + h, r); this.arcTo(x + w, y + h, x, y + h, r); this.arcTo(x, y + h, x, y, r); this.arcTo(x, y, x + w, y, r); this.closePath(); return this; }
 
-// polyfill for roundRect
-CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
-  if (w < 2 * r) r = w / 2;
-  if (h < 2 * r) r = h / 2;
-  this.beginPath();
-  this.moveTo(x + r, y);
-  this.arcTo(x + w, y, x + w, y + h, r);
-  this.arcTo(x + w, y + h, x, y + h, r);
-  this.arcTo(x, y + h, x, y, r);
-  this.arcTo(x, y, x + w, y, r);
-  this.closePath();
-  return this;
-}
-
-// ---- loop runner ----
-function loop(now){
-  const dt = Math.min(0.06,(now-lastTime)/1000);
-  lastTime = now;
-  update(dt);
-  draw();
-  requestAnimationFrame(loop);
-}
+function loop(now){ const dt = Math.min(0.06,(now-lastTime)/1000); lastTime=now; update(dt); draw(); requestAnimationFrame(loop); }
 requestAnimationFrame(loop);
 
-// ---- UI initializers ----
-updateElixirUI();
-updateHPUI();
+// --- UI bindings ---
+updateElixirUI(); updateHPUI(); document.getElementById('restart').onclick = ()=>{ entities=[];projectiles=[];particles=[];elixir=5;playerHP=100;enemyHP=100;timerSeconds=180;gameOver=false;for(const k in towers){towers[k].hp=(k.includes('king')?120:60);towers[k]._counted=false} updateElixirUI(); updateHPUI(); log('Spel herstart'); }
 
-// restart
-document.getElementById('restart').onclick = ()=>{
-  // reset state
-  entities=[];particles=[];elixir=5;playerHP=100;enemyHP=100;timerSeconds=180;gameOver=false;for(const k in towers){towers[k].hp=(k.includes('king')?120:60);towers[k]._counted=false};updateElixirUI();updateHPUI();log('Spel herstart');
-}
-
-// small initial messages
-log('Welkom in deze Clash-achtige demo. Gebruik kaarten onderaan.');
+log('Welkom! Veel poppetjes beschikbaar: tank, ranged, support, splash, spell. Klik een kaart en deploy op jouw helft.');
 
 </script>
 </body>
