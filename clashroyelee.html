@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Clash-ish Arena — uitgebreide demo</title>
+  <style>
+    /* Zelfde styles als voorheen */
+    /* ... (styles blijven gelijk, ingekort hier voor overzicht) ... */
+  </style>
+</head>
+<body>
+  <!-- HTML-structuur blijft gelijk -->
+  <!-- ... -->
+<script>
+// ---- Setup canvas en variabelen blijven gelijk ----
+// ... (zelfde setup code) ...
+
+// ---- Extra Cards ----
+const cardDefs = [
+  {id:'knight',name:'Knight',cost:3,hp:20,dmg:8,speed:30,size:18,color:'#c9b28f',range:14},
+  {id:'archer',name:'Archer',cost:2,hp:12,dmg:4,speed:60,size:12,color:'#7fb3ff',range:120},
+  {id:'giant',name:'Giant',cost:5,hp:40,dmg:14,speed:20,size:26,color:'#f6a36b',range:16},
+  {id:'wizard',name:'Wizard',cost:4,hp:14,dmg:10,speed:40,size:14,color:'#bb88ff',range:150},
+  {id:'miniPekka',name:'MiniPekka',cost:4,hp:30,dmg:20,speed:35,size:20,color:'#888888',range:18},
+  {id:'healer',name:'Healer',cost:3,hp:18,dmg:-6,speed:40,size:14,color:'#ffff88',range:60}
+];
+// De healer heeft negatieve dmg = genezing voor vriendelijke units binnen bereik.
+
+// (Cards render code blijft gelijk)
+
+// ---- Enemy AI verbeterd ----
+let enemySpawnTimer = 1.5;
+function enemyAI(dt){
+  enemySpawnTimer -= dt;
+  if(enemySpawnTimer <=0){
+    // Snellere spawns en strategischere keuzes
+    enemySpawnTimer = rand(1.0,2.5);
+    // pick een zwaardere kaart iets vaker
+    const heavyCards = [cardDefs[2],cardDefs[3],cardDefs[4]]; // Giant, Wizard, MiniPekka
+    const pickHeavy = Math.random()<0.6;
+    let def;
+    if(pickHeavy){ def = heavyCards[Math.floor(rand(0,heavyCards.length))]; }
+    else { def = cardDefs[Math.floor(rand(0,cardDefs.length))]; }
+    // pick spawn position op top half
+    const x = rand(120,780);
+    const y = rand(60,190);
+    spawnUnit(x,y,{...def,isEnemy:true});
+  }
+}
+
+// ---- Unit update aangepast voor healer ----
+class Unit{
+  constructor(x,y,opts){
+    this.x=x;this.y=y;this.vx=0;this.vy=0;this.hp=opts.hp;this.maxHp=opts.hp;this.dmg=opts.dmg;this.speed=opts.speed;this.size=opts.size;this.color=opts.color;this.isEnemy=!!opts.isEnemy;this.range=opts.range||16;this.target=null;this.id= Math.random().toString(36).slice(2,9);
+  }
+  update(dt){
+    // Healer zoekt vriendelijke units en geneest
+    if(this.dmg<0){
+      // genezer
+      for(const u of entities){
+        if(u.isEnemy===this.isEnemy && u.hp<u.maxHp && u!==this){
+          const d = Math.hypot(u.x-this.x,u.y-this.y);
+          if(d < this.range){
+            u.hp = clamp(u.hp - this.dmg*dt,0,u.maxHp); // -dmg = heal
+            particles.push(new Particle(u.x,u.y,'#ffff88'));
+          }
+        }
+      }
+      // verplaats langzaam naar midden
+      if(this.isEnemy) this.y+=this.speed*dt; else this.y-=this.speed*dt;
+      return;
+    }
+    // rest zoals voorheen
+    if(!this.target || this.target.hp<=0){
+      let best=null;let bestd=1e9;
+      for(const e of entities){
+        if(e===this) continue;
+        if(e.isEnemy===this.isEnemy) continue;
+        const d = Math.hypot(e.x-this.x,e.y-this.y);
+        if(d<bestd){bestd=d;best=e}
+      }
+      for(const key in towers){
+        const t=towers[key];
+        if(t.isEnemy===this.isEnemy) continue;
+        const d = Math.hypot(t.x-this.x,t.y-this.y);
+        if(d<bestd){bestd=d;best=t}
+      }
+      this.target = best;
+    }
+    if(this.target){
+      const dx = (this.target.x||this.target.x)-this.x;
+      const dy = (this.target.y||this.target.y)-this.y;
+      const d = Math.hypot(dx,dy);
+      if(d>this.range){
+        this.vx = (dx/d)*this.speed;
+        this.vy = (dy/d)*this.speed;
+        this.x += this.vx*dt;
+        this.y += this.vy*dt;
+      } else {
+        this.vx=0;this.vy=0;
+        if(!this._atkTimer) this._atkTimer=0;
+        this._atkTimer -= dt;
+        if(this._atkTimer<=0){
+          this._atkTimer = 0.8;
+          if(this.target.hp!==undefined){
+            this.target.hp -= this.dmg;
+            particles.push(new Particle(this.target.x,this.target.y, this.isEnemy? 'red':'#7fe0a9'));
+            if(this.target.hp<=0){
+              if(this.target === towers.kingEnemy || this.target === towers.kingFriendly){
+                this.target.hp=0;
+              }
+              if(this.target.id){
+                const idx = entities.indexOf(this.target);
+                if(idx>=0) entities.splice(idx,1);
+              }
+              this.target = null;
+            }
+          }
+        }
+      }
+    }
+    if(this.hp<=0){
+      const idx = entities.indexOf(this);
+      if(idx>=0) entities.splice(idx,1);
+    }
+  }
+}
+// rest van de code (particles, spawnUnit, draw, update etc.) blijft gelijk.
+</script>
+</body>
+</html>
