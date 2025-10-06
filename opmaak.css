@@ -26,7 +26,7 @@ ul li {
 
 ul li a {
   display: block;
-  color: white;
+  color: rgb(17, 17, 17);
   text-align: center;
   padding: 14px 16px;
   text-decoration: none;
@@ -37,7 +37,7 @@ ul li a:hover {
 }
 
 ul li a.active {
-  background-color: #ebefee;
+  background-color: #070808;
 }
 /* Add a lightgray right border to all list items, except the last */
 ul li {
