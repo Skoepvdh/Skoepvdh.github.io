@@ -42,7 +42,7 @@ ul li a.active {
 /* Add a lightgray right border to all list items, except the last */
 ul li {
   float: left;
-  border-right: 1px solid #bbbbbb;
+  border-right: 1px solid #111010;
 }
 
 ul li:last-child {
