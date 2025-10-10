@@ -49,5 +49,5 @@ ul li:last-child {
   border-right: none;
 }
 table, th, td {
-  border: 1px solid green;
+  border: 1px solid rgb(4, 4, 4);
 }
